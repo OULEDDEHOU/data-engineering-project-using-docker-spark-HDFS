@@ -1,0 +1,149 @@
+---
+
+version: "3"
+
+services:
+  namenode:
+    image: spark-jupyter-hadoop-master-namenode:latest
+    container_name: namenode1
+    restart: always
+    ports:
+      - 9870:9870
+      - 9000:9000
+    volumes:
+      - hadoop_namenode:/hadoop/dfs/name
+    environment:
+      - CLUSTER_NAME=test
+    env_file:
+      - ./hadoop.env
+    networks:
+     - spark-network
+
+  datanode1:
+    image: spark-jupyter-hadoop-master-datanode1:latest
+    container_name: datanode1
+    restart: always
+    volumes:
+      - hadoop_datanode:/hadoop/dfs/data
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870"
+    ports:
+     - 9864:9864
+    env_file:
+      - ./hadoop.env
+    networks:
+     - spark-network
+
+  datanode2:
+    image: spark-jupyter-hadoop-master-datanode2:latest
+    container_name: datanode2
+    restart: always
+    volumes:
+      - hadoop_datanode:/hadoop/dfs/data
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870"
+    ports:
+     - 9865:9864
+    env_file:
+      - ./hadoop.env
+    networks:
+     - spark-network
+  
+  resourcemanager:
+    image: spark-jupyter-hadoop-master-resourcemanager:latest
+    container_name: resourcemanager1
+    restart: always
+    environment:
+      SERVICE_PRECONDITION: "namenode:9000 namenode:9870 datanode:9864"
+    ports : 
+     - 8088:8088 
+    env_file:
+      - ./hadoop.env
+    networks:
+     - spark-network
+
+  nodemanager1:
+    image: spark-jupyter-hadoop-master-nodemanager1:latest
+    container_name: nodemanager1
+    restart: always
+    environment:
+      SERVICE_PRECONDITION: "namenode:9000 namenode:9870 datanode:9864 resourcemanager:8088"
+    env_file:
+      - ./hadoop.env
+    networks:
+     - spark-network
+
+  historyserver:
+    image: spark-jupyter-hadoop-master-historyserver:latest
+    container_name: historyserver1
+    restart: always
+    environment:
+      SERVICE_PRECONDITION: "namenode:9000 namenode:9870 datanode:9864 resourcemanager:8088"
+    volumes:
+      - hadoop_historyserver:/hadoop/yarn/timeline
+    env_file:
+      - ./hadoop.env
+    networks:
+     - spark-network
+
+  jupyterlab:
+    image: spark-jupyter-hadoop-master-jupyterlab:latest
+    container_name: jupyterlab1
+    ports:
+      - 8889:8889
+      - 4040:4040
+    volumes:
+      - shared-workspace:/opt/workspace;
+    networks:
+     - spark-network
+
+  spark-master:
+    build: ./build_cluster/spark/master
+    container_name: master
+    ports:
+      - 8080:8080
+      - 7077:7077
+    volumes:
+      - shared-workspace:/opt/workspace
+    networks:
+     - spark-network
+  worker-1:
+    build: ./build_cluster/spark/worker
+    container_name: worker-1
+    environment:
+      - SPARK_WORKER_CORES=1
+      - SPARK_WORKER_MEMORY=512m
+    ports:
+      - 8081:8081
+    volumes:
+      - shared-workspace:/opt/workspace
+    depends_on:
+      - spark-master
+    networks:
+     - spark-network
+  worker-2:
+    build: ./build_cluster/spark/worker
+    container_name: worker-2
+    environment:
+      - SPARK_WORKER_CORES=1
+      - SPARK_WORKER_MEMORY=512m
+    ports:
+      - 8082:8081
+    volumes:
+      - shared-workspace:/opt/workspace
+    depends_on:
+      - spark-master
+    networks:
+     - spark-network
+     
+volumes:
+  hadoop_namenode:
+  hadoop_datanode:
+  hadoop_historyserver:
+  shared-workspace:
+    name: "hadoop-distributed-file-system"
+    driver: local
+
+networks:
+    spark-network:
+      driver: bridge
